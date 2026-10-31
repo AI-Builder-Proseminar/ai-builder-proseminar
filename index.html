@@ -632,7 +632,7 @@ button, input, select, textarea { font-family:inherit; }
   <div class="x-beta" role="note"><b>Beta</b>This option is still in development, and some recommendations may contain errors. Treat them as suggestions to explore, not as a final definition of how to build your project. Talk to the course team before you commit to a direction.</div>
   <section class="x-idea" aria-labelledby="h-idea">
     <h2 id="h-idea">Your idea</h2>
-    <p class="x-muted" style="margin:0">Describe it in a few sentences: who it’s for and what problem it solves.</p>
+    <p class="x-muted" style="margin:0">Describe it in a few sentences: who it’s for and what problem it solves. Please don’t include personal or sensitive information.</p>
     <label class="x-sr" for="i-idea">Your idea</label>
     <textarea id="i-idea" maxlength="1500" placeholder="For example: a tool that tells MBA students which recruiting events to attend this week."></textarea>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
@@ -818,7 +818,7 @@ button, input, select, textarea { font-family:inherit; }
     <button type="submit" class="x-btn x-small" id="x-csend">Send</button>
     <button type="button" class="x-btn x-small x-ghost" id="x-cstop" hidden>Stop</button>
   </form>
-  <p class="fine">Answers use the course information on this page. For anything not covered, ask the course team.</p>
+  <p class="fine">Answers use the course information on this page. For anything not covered, ask the course team. Please don’t type personal or sensitive information.</p>
 </section>
 <div id="x-toast" role="status" aria-live="polite"></div>
 
@@ -1335,7 +1335,7 @@ function csvCell(v){ v=String(v==null?"":v); return /[",\n]/.test(v)?'"'+v.repla
 
 /* ---------- capabilities and data ---------- */
 var C={db:null,user:null,uid:null,dl:null,assets:null,sample:undefined,canEdit:false,isOwner:false,ready:false};
-var S={gallery:null,docs:null,skills:null,taken:{},reviews:{},ohcfg:{blocked:[],where:""},kb:"",
+var S={gallery:null,docs:null,skills:null,taken:{},reviews:{},ohcfg:{blocked:[],where:""},kb:"",lastExport:0,
   mine:{projects:[],oh:[],skills:[]},inbox:{projects:[],oh:[],skills:[]},dbErr:false};
 
 function flatten(snap){ return snap.docs.map(function(d){ var o=d.data()||{}; o.id=d.id; return o; }); }
@@ -1355,6 +1355,7 @@ async function initCaps(){
     db.collection("reviews").onSnapshot(function(s){ var m={}; s.docs.forEach(function(d){ m[d.id]=d.data()||{}; }); S.reviews=m; refresh(); },function(){});
     db.doc("config/officehours").onSnapshot(function(s){ var d=s.exists?(s.data()||{}):{}; S.ohcfg={blocked:d.blocked||[],where:d.where||""}; refresh(); },function(){});
     db.doc("content/knowledge").onSnapshot(function(s){ S.kb=s.exists?String((s.data()||{}).text||""):""; refreshManage(); },function(){});
+    db.doc("config/export").onSnapshot(function(s){ S.lastExport=s.exists?Number((s.data()||{}).ts||0):0; refreshManage(); },function(){});
     try{ if(C.user){ C.uid=await C.user.id(); C.canEdit=!!(await C.user.canEdit()); C.isOwner=!!(await C.user.isOwner()); } }catch(e){}
     C.ready=true;
     if(C.uid){
@@ -1733,7 +1734,7 @@ function refreshManage(){
   var tabs=[["projects","Projects",pend("projects")],["oh","Office hours",pend("oh")],["skills","Skills",pend("skills")],["docs","Learning documents",0],["kb","Chatbot",0],["settings","Office-hours settings",0],["export","Export",0]];
   var active=document.activeElement&&document.activeElement.closest&&document.activeElement.closest("#m-panel");
   if(active&&(document.activeElement.tagName==="INPUT"||document.activeElement.tagName==="TEXTAREA")) return; // don’t wipe what the team is typing
-  body.innerHTML='<div class="x-tabs" role="tablist">'+tabs.map(function(t){ return '<button type="button" role="tab" data-mtab="'+t[0]+'" aria-selected="'+(M.tab===t[0])+'">'+t[1]+(t[2]?'<span class="n">'+t[2]+'</span>':"")+'</button>'; }).join("")+'</div><div id="m-panel"></div>';
+  body.innerHTML=exportReminder()+'<div class="x-tabs" role="tablist">'+tabs.map(function(t){ return '<button type="button" role="tab" data-mtab="'+t[0]+'" aria-selected="'+(M.tab===t[0])+'">'+t[1]+(t[2]?'<span class="n">'+t[2]+'</span>':"")+'</button>'; }).join("")+'</div><div id="m-panel"></div>';
   var p=$("#m-panel");
   if(M.tab==="projects") p.innerHTML=mProjects();
   else if(M.tab==="oh") p.innerHTML=mOh();
@@ -1822,7 +1823,15 @@ function mSettings(){
    +'<h2 class="x-h2">Dates without office hours</h2><form class="x-form" id="m-blockform" style="grid-template-columns:auto auto;align-items:end;justify-content:start"><label>Monday<input type="date" id="mb-date"></label><div><button type="submit" class="x-btn x-small">Block this date</button></div></form>'
    +(b.length?'<div class="x-list" style="margin-top:14px">'+b.map(function(d){ return '<div class="x-mrow"><div class="x-acts"><span>'+esc(d)+'</span><button type="button" class="x-btn x-small x-ghost" data-unblock="'+esc(d)+'">Remove</button></div></div>'; }).join("")+'</div>':'<p class="x-muted" style="margin-top:10px">No blocked dates.</p>');
 }
+function exportReminder(){
+  var days=S.lastExport?Math.floor((Date.now()-S.lastExport)/864e5):null;
+  if(days!==null&&days<15){ var left=15-days; return '<p class="x-note" style="max-width:none">Last full backup: '+days+(days===1?' day':' days')+' ago. The next one is due in '+left+(left===1?' day.':' days.')+'</p>'; }
+  return '<p class="x-note warn" style="max-width:none"><b>Time to back up your data.</b> '+(days===null?'No full backup has been recorded yet.':'Your last full backup was '+days+' days ago.')+' Open the <button type="button" class="x-link" data-mtab="export">Export tab</button> and download the full backup. Repeat it every 15 days.</p>';
+}
 function mExport(){
+  return '<p class="x-txt"><b>Full backup (every 15 days).</b> One JSON file with everything: submissions, gallery, skills, learning documents, reviews, booked slots, office-hours settings and the chatbot text. It includes emails, so keep it private. Files that students uploaded (screenshots, PRDs) are not inside the file; download them from the Supabase dashboard (Storage) if you need copies.</p><div style="display:flex;gap:10px;flex-wrap:wrap"><button type="button" class="x-btn" data-backup="1">Download full backup</button></div><h2 class="x-h2">Spreadsheets (CSV)</h2><p class="x-txt">Download only the student submissions as CSV files. These do not reset the 15-day reminder.</p><div class="x-acts" style="display:flex;gap:10px;flex-wrap:wrap"><button type="button" class="x-btn x-small" data-csv="projects">Project submissions</button><button type="button" class="x-btn x-small" data-csv="oh">Office-hours requests</button><button type="button" class="x-btn x-small" data-csv="skills">Skill submissions</button></div>';
+}
+function mExportOld(){
   return '<p class="x-txt">Download every submission as a CSV file. Emails are included, so keep the files private.</p><div class="x-acts" style="display:flex;gap:10px;flex-wrap:wrap"><button type="button" class="x-btn x-small" data-csv="projects">Project submissions</button><button type="button" class="x-btn x-small" data-csv="oh">Office-hours requests</button><button type="button" class="x-btn x-small" data-csv="skills">Skill submissions</button></div>';
 }
 function csvFor(kind){
@@ -1862,6 +1871,8 @@ document.addEventListener("click",async function(e){
   if(dd){ if(await wr(async function(){ await C.db.doc("learning_docs/"+dd.getAttribute("data-deldoc")).delete(); })) toast("Deleted."); return; }
   var ub=t.closest("[data-unblock]");
   if(ub){ var left=(S.ohcfg.blocked||[]).filter(function(d){ return d!==ub.getAttribute("data-unblock"); }); await wr(async function(){ await C.db.doc("config/officehours").set({blocked:left,where:S.ohcfg.where||""}); }); return; }
+  var bk=t.closest("[data-backup]");
+  if(bk){ var snap={exportedAt:new Date().toISOString(),gallery:S.gallery||[],learning_docs:S.docs||[],community_skills:S.skills||[],reviews:S.reviews,slots_taken:Object.keys(S.taken),officehours:S.ohcfg,chatbot_text:S.kb,inbox:S.inbox}; var okb=await saveFile("proseminar-backup-"+new Date().toISOString().slice(0,10)+".json",new Blob([JSON.stringify(snap,null,2)],{type:"application/json"})); if(okb){ await wr(async function(){ await C.db.doc("config/export").set({ts:Date.now()}); }); toast("Backup saved. The next one is due in 15 days."); } return; }
   var cs=t.closest("[data-csv]");
   if(cs){ saveFile("proseminar-"+cs.getAttribute("data-csv")+".csv",new Blob([csvFor(cs.getAttribute("data-csv"))],{type:"text/csv"})); return; }
 });
